@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Autocomplete
@@ -9,8 +10,10 @@ namespace Autocomplete
     {
         static void Main()
         { 
-            List<string> dictionary = new List<string>();
-            List<string> autocomplete = new List<string>();
+            ICollection<string> dictionary = new List<string>();
+            ICollection<string> autocomplete = new List<string>();
+            IDictionary<string, List<string>> acronyms = new Dictionary<string, List<string>>();
+
             bool isDictionaryFill = true;
 
             Console.WriteLine("Считываем исходные данные");
@@ -26,6 +29,32 @@ namespace Autocomplete
                         {
                             if (isDictionaryFill)
                             {
+                                string[] splitted = line.Split(' ');
+
+                                if (splitted.Length > 1)
+                                {
+                                    string acronym = "";
+
+                                    foreach (string word in splitted)
+                                    {
+                                        acronym += word[0].ToString().ToLower();
+                                    }
+
+                                    if (acronyms.ContainsKey(acronym))
+                                    {
+                                        List<string> foundedSentences;
+                                        if (acronyms.TryGetValue(acronym, out foundedSentences))
+                                        {
+                                            foundedSentences.Add(line);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        acronyms.Add(new KeyValuePair<string, List<string>>(acronym, new List<string> { line }));
+                                    }
+                                    Console.WriteLine(line + " --> " + acronym);
+                                }
+
                                 dictionary.Add(line.ToLower());
                                 Console.WriteLine(line);
                             }
@@ -50,49 +79,38 @@ namespace Autocomplete
 
             foreach (var autocompleteWord in autocomplete)
             {
-                bool foundMatch = false;
-                List<string> hitsOnConsist = new List<string>();
+                List<string> hits = new List<string>();
 
-                foreach (var dictionaryWord in dictionary)
+                bool isAcronym = autocompleteWord.Split(' ').Length == 1;
+
+                bool isAllLetterCapitalAcronym = isAcronym && Regex.IsMatch(autocompleteWord, @"[A-Z]");
+
+                if (isAllLetterCapitalAcronym)
                 {
-                    if (Regex.IsMatch(dictionaryWord, autocompleteWord + @"(\S+)")) //@"(?:^|\s)" + 
+                    CheckAcronym(autocompleteWord.ToLower(), acronyms, ref hits);
+
+                    if (hits.Count < 10)
                     {
-                        //if (!foundMatch)
-                        //{
-                        //    Console.WriteLine("[" + autocompleteWord + "]");
-                        //    foundMatch = true;
-                        //}
+                        CheckConsist(autocompleteWord.ToLower(), dictionary, ref hits);
+                    }
+                }
+                else
+                {
+                    CheckConsist(autocompleteWord, dictionary, ref hits);
 
-                        //Console.WriteLine(dictionaryWord);
-
-                        hitsOnConsist.Add(dictionaryWord);
-                        foundMatch = true;
-
-                        //Console.WriteLine(dictionaryWord + " --> " + autocompleteWord);
+                    if (isAcronym && hits.Count < 10)
+                    {
+                        CheckAcronym(autocompleteWord, acronyms, ref hits);
                     }
                 }
 
-                if (foundMatch)
+                if (hits.Any())
                 {
                     Console.WriteLine("[" + autocompleteWord + "]");
 
-                    List<string> lowerPriority = new List<string>();
-
-                    foreach (string hits in hitsOnConsist)
+                    foreach (string hit in hits)
                     {
-                        if (Regex.IsMatch(hits, @"(?:^|\s)" + autocompleteWord))
-                        {
-                            Console.WriteLine(hits);
-                        }
-                        else
-                        {
-                            lowerPriority.Add(hits);
-                        }
-                    }
-
-                    foreach (string hits in lowerPriority)
-                    {
-                        Console.WriteLine(hits);
+                        Console.WriteLine(hit);
                     }
                 }
             }
@@ -113,6 +131,55 @@ namespace Autocomplete
             }
 
             return true;
+        }
+
+        private static void CheckAcronym(string acronym, IDictionary<string, List<string>> acronyms, ref List<string> list)
+        {
+            if (list.Count < 10 && acronyms.ContainsKey(acronym))
+            {
+                List<string> foundedSentences;
+                if (acronyms.TryGetValue(acronym, out foundedSentences))
+                {
+                    int i = 0;
+
+                    while (list.Count < 10 && i < foundedSentences.Count)
+                    {
+                        list.Add(foundedSentences[i]);
+
+                        i++;
+                    }
+                }
+            }
+        }
+
+        private static void CheckConsist(string word, ICollection<string> dictionary, ref List<string> list)
+        {
+            List<string> lowerPriority = new List<string>();
+
+            foreach (var dictionaryWord in dictionary)
+            {
+                if (list.Count < 10 && Regex.IsMatch(dictionaryWord, word))
+                {
+                    if (Regex.IsMatch(dictionaryWord, @"(?:^|\s)" + word))
+                    {
+                        list.Add(dictionaryWord);
+                    }
+                    else
+                    {
+                        lowerPriority.Add(dictionaryWord);
+                    }
+                }
+            }
+
+            if (list.Count < 10)
+            {
+                int i = 0;
+                while (list.Count < 10 && i < lowerPriority.Count)
+                {
+                    list.Add(lowerPriority[i]);
+                    i++;
+                }
+            }
         }
     }
 }
