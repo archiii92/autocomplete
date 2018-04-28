@@ -16,7 +16,7 @@ namespace Autocomplete
 
             bool isDictionaryFill = true;
 
-            Console.WriteLine("Считываем исходные данные");
+            Console.WriteLine("Read input data");
 
             using (StreamReader reader = new StreamReader("Input.txt"))
             {
@@ -29,7 +29,7 @@ namespace Autocomplete
                         {
                             if (isDictionaryFill)
                             {
-                                string[] splitted = line.Split(' ');
+                                string[] splitted = line.Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries);
 
                                 if (splitted.Length > 1)
                                 {
@@ -42,10 +42,10 @@ namespace Autocomplete
 
                                     if (acronyms.ContainsKey(acronym))
                                     {
-                                        List<string> foundedSentences;
-                                        if (acronyms.TryGetValue(acronym, out foundedSentences))
+                                        List<string> foundSentences;
+                                        if (acronyms.TryGetValue(acronym, out foundSentences))
                                         {
-                                            foundedSentences.Add(line);
+                                            foundSentences.Add(line);
                                         }
                                     }
                                     else
@@ -75,13 +75,13 @@ namespace Autocomplete
                     }
                 }
             }
-            Console.WriteLine("Начинаем воркать");
+            Console.WriteLine("Start working...");
 
             foreach (var autocompleteWord in autocomplete)
             {
                 List<string> hits = new List<string>();
 
-                bool isAcronym = autocompleteWord.Split(' ').Length == 1;
+                bool isAcronym = !autocompleteWord.Contains(" ");
 
                 bool isAllLetterCapitalAcronym = isAcronym && Regex.IsMatch(autocompleteWord, @"[A-Z]");
 
@@ -106,20 +106,31 @@ namespace Autocomplete
 
                 if (hits.Any())
                 {
-                    Console.WriteLine("[" + autocompleteWord + "]");
-
-                    foreach (string hit in hits)
+                    using (StreamWriter outputFile = new StreamWriter("Output.txt"))
                     {
-                        Console.WriteLine(hit);
+                        Console.WriteLine("[" + autocompleteWord + "]");
+                        outputFile.WriteLine("[" + autocompleteWord + "]");
+
+                        foreach (string hit in hits)
+                        {
+                            Console.WriteLine(hit);
+                            outputFile.WriteLine(hit);
+                        }
                     }
                 }
             }
+            Console.WriteLine("Press any key to continue");
             Console.ReadLine();
         }
 
+        /// <summary>
+        ///     Checking that the string consists of a Latin letter, and each word does not exceed 50 characters
+        /// </summary>
+        /// <param name="line">String to be validated</param>
+        /// <returns>Flag indicating that the string has been validated</returns>
         private static bool CheckLine(string line)
         {
-            string[] splitted = line.Split(' ');
+            string[] splitted = line.Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries);
 
             foreach (var word in splitted)
             {
@@ -133,18 +144,24 @@ namespace Autocomplete
             return true;
         }
 
+        /// <summary>
+        ///     Check for the presence of acronym in the dictionary
+        /// </summary>
+        /// <param name="acronym">Acronym, whose decoding we will look for</param>
+        /// <param name="acronyms">Dictionary of all found acronyms</param>
+        /// <param name="list">A list transferred by reference, in which all sentences associated with the acronym will be added</param>
         private static void CheckAcronym(string acronym, IDictionary<string, List<string>> acronyms, ref List<string> list)
         {
             if (list.Count < 10 && acronyms.ContainsKey(acronym))
             {
-                List<string> foundedSentences;
-                if (acronyms.TryGetValue(acronym, out foundedSentences))
+                List<string> foundSentences;
+                if (acronyms.TryGetValue(acronym, out foundSentences))
                 {
                     int i = 0;
 
-                    while (list.Count < 10 && i < foundedSentences.Count)
+                    while (list.Count < 10 && i < foundSentences.Count)
                     {
-                        list.Add(foundedSentences[i]);
+                        list.Add(foundSentences[i]);
 
                         i++;
                     }
@@ -152,17 +169,25 @@ namespace Autocomplete
             }
         }
 
+        /// <summary>
+        ///     Check if the string is part of another string
+        /// </summary>
+        /// <param name="word"></param>
+        /// <param name="dictionary">List of all correct input strings</param>
+        /// <param name="list">A list transferred by reference, in which all words and sentences containing the word will be added</param>
         private static void CheckConsist(string word, ICollection<string> dictionary, ref List<string> list)
         {
             List<string> lowerPriority = new List<string>();
 
             foreach (var dictionaryWord in dictionary)
             {
-                if (list.Count < 10 && Regex.IsMatch(dictionaryWord, word))
+                if (Regex.IsMatch(dictionaryWord, word))
                 {
                     if (Regex.IsMatch(dictionaryWord, @"(?:^|\s)" + word))
                     {
                         list.Add(dictionaryWord);
+
+                        if (list.Count == 10) break;
                     }
                     else
                     {
@@ -171,14 +196,11 @@ namespace Autocomplete
                 }
             }
 
-            if (list.Count < 10)
+            int i = 0;
+            while (list.Count < 10 && i < lowerPriority.Count)
             {
-                int i = 0;
-                while (list.Count < 10 && i < lowerPriority.Count)
-                {
-                    list.Add(lowerPriority[i]);
-                    i++;
-                }
+                list.Add(lowerPriority[i]);
+                i++;
             }
         }
     }
