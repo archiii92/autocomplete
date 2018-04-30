@@ -1,2 +1,5 @@
 /Autocomplete/bin
 /Autocomplete/obj
+
+*.suo
+*.user
